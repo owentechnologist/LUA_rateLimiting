@@ -24,7 +24,7 @@ In our example, the SortedSets get populated with the timestamp up to the most r
 Here is the result of calling ZRANGE on a key that holds entries for a shared resource with an id of 12:
 
 ```
-127.0.0.1:6379> ZRANGE z:rl:tw:1sec:resource:12{12} 0 -1 withscores
+127.0.0.1:6379> ZRANGE z:rl:resource:12{12} 0 -1 withscores
 1) "104768"
 2) "1636330091"
 3) "111348"
@@ -75,7 +75,7 @@ Which can then be used with the EVALSHA command along with necessary arguments w
 * in the following example the resource '12' has a limit of 5 invocations every 10 seconds, while the individual consumer '1' has a limit of 3 operations every 10 seconds. 
 
 ```
-EVALSHA 6efc874244ac8797c2b893fdafcd95c25a480003 2 z:rl:tw:1sec:resource:12{12} z:rl:tw:1sec:resource:12{12}:consumer:1 10 5 3
+EVALSHA 6efc874244ac8797c2b893fdafcd95c25a480003 2 z:rl:resource:12{12} z:rl:resource:12{12}:consumer:1 10 5 3
 ```
 
 Which results in output like this:
@@ -106,7 +106,7 @@ redis-cli -i 1
 Then at the prompt issue the call to the script using the first consumer id:  [note that I also use a number before the call to ask redis-cli to repeat the command 100 times]
 
 ```
-100 EVALSHA 6efc874244ac8797c2b893fdafcd95c25a480003 2 z:rl:tw:1sec:resource:12{12} z:rl:tw:1sec:resource:12:{12}consumer:1 10 5 3
+100 EVALSHA 6efc874244ac8797c2b893fdafcd95c25a480003 2 z:rl:resource:12{12} z:rl:resource:12:{12}consumer:1 10 5 3
 ```
 
 In a separate shell, start the second redis-cli instance with a 2 second interval:
@@ -118,7 +118,7 @@ redis-cli -i 2
 Then at the prompt issue a call to the script using a different consumer id: (this is done by changing the name of the second key passed in) 
 
 ```
-100 EVALSHA 6efc874244ac8797c2b893fdafcd95c25a480003 2 z:rl:tw:1sec:resource:12{12} z:rl:tw:1sec:resource:12{12}:consumer:2 10 5 3
+100 EVALSHA 6efc874244ac8797c2b893fdafcd95c25a480003 2 z:rl:resource:12{12} z:rl:resource:12{12}:consumer:2 10 5 3
 ```
 
 
@@ -167,13 +167,13 @@ Meanhwile, the slower second session with the 2 second interval between its invo
 Looking at the resulting cardinality of the involved SortedSets reveals this state at the end of the run:
 
 ```
-127.0.0.1:6379> ZCARD z:rl:tw:1sec:resource:12{12}
+127.0.0.1:6379> ZCARD z:rl:resource:12{12}
 (integer) 5
 
-127.0.0.1:6379> ZCARD z:rl:tw:1sec:resource:12{12}:consumer:1
+127.0.0.1:6379> ZCARD z:rl:resource:12{12}:consumer:1
 (integer) 3
 
-127.0.0.1:6379> ZCARD z:rl:tw:1sec:resource:12{12}:consumer:2
+127.0.0.1:6379> ZCARD z:rl:resource:12{12}:consumer:2
 (integer) 3
 ```
 
@@ -188,7 +188,7 @@ Looking at the resulting cardinality of the involved SortedSets reveals this sta
 Here is an example run with a 1/second redis-cli:
 
 ```
-127.0.0.1:6379> 25 EVALSHA d64787ff546895181f231ed3102003a9697a7704 2 z:rl:tw:1sec:resource:12{12} z:rl:tw:1sec:resource:12{12}:consumer:1 10 5 3
+127.0.0.1:6379> 25 EVALSHA d64787ff546895181f231ed3102003a9697a7704 2 z:rl:resource:12{12} z:rl:resource:12{12}:consumer:1 10 5 3
 "True"
 "True"
 "False"
@@ -220,7 +220,7 @@ Here is an example run with a 1/second redis-cli:
 And the same time-frame with a 2/second redis-cli:
 
 ```
-127.0.0.1:6379> 10 EVALSHA d64787ff546895181f231ed3102003a9697a7704 2 z:rl:tw:1sec:resource:12{12} z:rl:tw:1sec:resource:12{12}:consumer:2 10 5 3
+127.0.0.1:6379> 10 EVALSHA d64787ff546895181f231ed3102003a9697a7704 2 z:rl:resource:12{12} z:rl:resource:12{12}:consumer:2 10 5 3
 "True"
 "True"
 "False"
@@ -237,13 +237,13 @@ And the same time-frame with a 2/second redis-cli:
 And the resulting ZCARD data for the keys involved:
 
 ```
-127.0.0.1:6379> zcard z:rl:tw:1sec:resource:12{12}:consumer:2
+127.0.0.1:6379> zcard z:rl:resource:12{12}:consumer:2
 (integer) 2
 (1.00s)
-127.0.0.1:6379> zcard z:rl:tw:1sec:resource:12{12}:consumer:1
+127.0.0.1:6379> zcard z:rl:resource:12{12}:consumer:1
 (integer) 3
 (1.00s)
-127.0.0.1:6379> zcard z:rl:tw:1sec:resource:12{12}
+127.0.0.1:6379> zcard z:rl:resource:12{12}
 (integer) 5
 (1.00s)
 ```
@@ -253,5 +253,13 @@ And the resulting ZCARD data for the keys involved:
 The content stored between the curly braces is used by redis as a routing value.  If the resource and the consumer share the same routing value: they can be processed in the same LUA script.  If they do not share the same routing value - a cross-slot error will occur.  For this reason it is helpful to provide a common and explicit value within a set of curly braces for the keys passed to our script.  
 
 Because the SortedSets are always being trimmed so that only the entries within the last desired time window are kept, this implementation should enable millions of consumers to be represented along with their resource as SortedSets stored within the same Shard.  By adjusting the routing value for both the resource key and the consumer keys, it is even possible to guide certain groupings of resources and their consumers away from each other.
+
+If I had a different resource to be protected with its consumers being limited, I could put its id inside the routing value instead. 
+
+```
+127.0.0.1:6379> 10 EVALSHA d64787ff546895181f231ed3102003a9697a7704 2 z:rl:resource:myduck{myduck} z:rl:resource:myduck{myduck}:consumer:2 10 5 3
+```
+
+As the routing is based on doing a modulus operator against the 16384 available slots and then routing the keys to the assigned partitions within your cluster that holds the resulting slot value - it should become obvious that you can have an influence on the distribution of your keys.  
 
 Check out this for more strategies and detail: https://redis.com/blog/redis-clustering-best-practices-with-keys/   
