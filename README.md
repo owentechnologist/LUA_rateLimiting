@@ -4,10 +4,10 @@
 An example of 'sliding window rate limiting' using LUA scripting.
 
 Other examples of rate limiting patterns exist:
-https://github.com/redislabsdemo/RateLimiter/tree/master/src/com/redislabs/metering/ratelimiter
-https://medium.com/swlh/rate-limiting-fdf15bfe84ab
-https://github.com/maguec/RateLimitingExample/tree/sliding_window
-https://redis.com/redis-best-practices/basic-rate-limiting/
+* https://github.com/redislabsdemo/RateLimiter/tree/master/src/com/redislabs/metering/ratelimiter
+* https://medium.com/swlh/rate-limiting-fdf15bfe84ab
+* https://github.com/maguec/RateLimitingExample/tree/sliding_window
+* https://redis.com/redis-best-practices/basic-rate-limiting/
 
 
 The purpose of the solution is to keep track of how many invocations are made: both against a shared resource in total, as well as for every individual consumer of that resource.  
