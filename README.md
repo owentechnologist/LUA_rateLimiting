@@ -172,6 +172,7 @@ Looking at the resulting cardinality of the involved SortedSets reveals this sta
 
 
 ## A version of the script that only returns True when it is OK to invoke the shared resource and False when it is not OK looks like this:
+(note it would be simple to replace False with 0 and True with 1 if you prefer)
 
 ```
 "local rlimit = 0+ARGV[2] local climit = 0+ARGV[3] local t = (redis.call('TIME'))[1] local t2 = (redis.call('TIME'))[2] redis.call('ZREMRANGEBYSCORE',KEYS[1],'0',(t-ARGV[1])) local rcount = (redis.call('ZCARD',KEYS[1])) if (rcount == rlimit) then return 'False' elseif (((redis.call('ZREMRANGEBYSCORE',KEYS[2],'0',(t-ARGV[1]))) < 1000000) and (redis.call('ZCARD',KEYS[2]) < climit)) then redis.call('ZADD',KEYS[1],t,t2) redis.call('ZADD',KEYS[2],t,t2) return 'True' else return 'False' end"
