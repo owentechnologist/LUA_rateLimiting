@@ -265,6 +265,27 @@ And the resulting ZCARD data for the keys involved:
 (1.00s)
 ```
 
+
+### Time it takes when the result is negative and a response of 0 is delivered: 191 microseconds. (note time measurements are to show a general idea of the cost) 
+
+```
+127.0.0.1:6379> multi
+OK
+127.0.0.1:6379> time
+QUEUED
+127.0.0.1:6379> EVALSHA a4fadd8a0971fa009896b0c7a71b8fe7c929353a 2 z:rl:tw:1sec:resource:12{12} z:rl:tw:1sec:resource:12{12}:consumer:3 10 5 3
+QUEUED
+127.0.0.1:6379> time
+QUEUED
+127.0.0.1:6379> exec
+1) 1) "1636395394"
+   2) "656738"
+2) "0"
+3) 1) "1636395394"
+   2) "656929"
+```
+
+
 ## A note on the use of {12} <-- curly braces in the keynames
 
 The content stored between the curly braces is used by redis as a routing value.  If the resource and the consumer share the same routing value: they can be processed in the same LUA script.  If they do not share the same routing value - a cross-slot error will occur.  For this reason it is helpful to provide a common and explicit value within a set of curly braces for the keys passed to our script.  
