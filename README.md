@@ -3,7 +3,14 @@
 
 An example of 'sliding window rate limiting' using LUA scripting.
 
-The purpose of the solution is to keep track of how many invocations are made both against a shared resource in total, as well as for every individual consumer of that resource.  
+Other examples of rate limiting patterns exist:
+https://github.com/redislabsdemo/RateLimiter/tree/master/src/com/redislabs/metering/ratelimiter
+https://medium.com/swlh/rate-limiting-fdf15bfe84ab
+https://github.com/maguec/RateLimitingExample/tree/sliding_window
+https://redis.com/redis-best-practices/basic-rate-limiting/
+
+
+The purpose of the solution is to keep track of how many invocations are made: both against a shared resource in total, as well as for every individual consumer of that resource.  
 
 By keeping track we can also enforce a limiting behavior - call this script before you invoke the actual underlying resource and if you get a positive response go ahead and invoke the actual resource.  If you get a negative response indictaing that either the reource is over the limit, or the consumer is over its limit, then you must wait a bit before trying again. 
 
@@ -68,7 +75,7 @@ Which can then be used with the EVALSHA command along with necessary arguments w
 * in the following example the resource '12' has a limit of 5 invocations every 10 seconds, while the individual consumer '1' has a limit of 3 operations every 10 seconds. 
 
 ```
-EVALSHA 6efc874244ac8797c2b893fdafcd95c25a480003 2 z:rl:tw:1sec:resource:12{12} z:rl:tw:1sec:resource:12:{12}consumer:1 10 5 3
+EVALSHA 6efc874244ac8797c2b893fdafcd95c25a480003 2 z:rl:tw:1sec:resource:12{12} z:rl:tw:1sec:resource:12{12}:consumer:1 10 5 3
 ```
 
 Which results in output like this:
@@ -105,13 +112,13 @@ Then at the prompt issue the call to the script using the first consumer id:  [n
 In a separate shell, start the second redis-cli instance with a 2 second interval:
 
 ```
-redis-cli -i 1
+redis-cli -i 2
 ```
 
 Then at the prompt issue a call to the script using a different consumer id: (this is done by changing the name of the second key passed in) 
 
 ```
-100 EVALSHA 6efc874244ac8797c2b893fdafcd95c25a480003 2 z:rl:tw:1sec:resource:12{12} z:rl:tw:1sec:resource:12:{12}consumer:2 10 5 3
+100 EVALSHA 6efc874244ac8797c2b893fdafcd95c25a480003 2 z:rl:tw:1sec:resource:12{12} z:rl:tw:1sec:resource:12{12}:consumer:2 10 5 3
 ```
 
 
@@ -124,9 +131,9 @@ Output from the first redis-cli session looks like this once the second session 
 "Adding 1 point to your count and 1 point to the resource count"
 "Adding 1 point to your count and 1 point to the resource count"
 "RESOURCE OVERLIMIT: 5"
-"z:rl:tw:1sec:resource:12:{12}consumer:1 CONSUMER OVERLIMIT: 3"
+"z:rl:tw:1sec:resource:12{12}:consumer:1 CONSUMER OVERLIMIT: 3"
 "RESOURCE OVERLIMIT: 5"
-"z:rl:tw:1sec:resource:12:{12}consumer:1 CONSUMER OVERLIMIT: 3"
+"z:rl:tw:1sec:resource:12{12}:consumer:1 CONSUMER OVERLIMIT: 3"
 "RESOURCE OVERLIMIT: 5"
 "RESOURCE OVERLIMIT: 5"
 "RESOURCE OVERLIMIT: 5"
@@ -134,9 +141,9 @@ Output from the first redis-cli session looks like this once the second session 
 "Adding 1 point to your count and 1 point to the resource count"
 "Adding 1 point to your count and 1 point to the resource count"
 "RESOURCE OVERLIMIT: 5"
-"z:rl:tw:1sec:resource:12:{12}consumer:1 CONSUMER OVERLIMIT: 3"
+"z:rl:tw:1sec:resource:12{12}:consumer:1 CONSUMER OVERLIMIT: 3"
 "RESOURCE OVERLIMIT: 5"
-"z:rl:tw:1sec:resource:12:{12}consumer:1 CONSUMER OVERLIMIT: 3"
+"z:rl:tw:1sec:resource:12{12}:consumer:1 CONSUMER OVERLIMIT: 3"
 "RESOURCE OVERLIMIT: 5"
 "RESOURCE OVERLIMIT: 5"
 "RESOURCE OVERLIMIT: 5"
@@ -163,10 +170,10 @@ Looking at the resulting cardinality of the involved SortedSets reveals this sta
 127.0.0.1:6379> ZCARD z:rl:tw:1sec:resource:12{12}
 (integer) 5
 
-127.0.0.1:6379> ZCARD z:rl:tw:1sec:resource:12:{12}consumer:1
+127.0.0.1:6379> ZCARD z:rl:tw:1sec:resource:12{12}:consumer:1
 (integer) 3
 
-127.0.0.1:6379> ZCARD z:rl:tw:1sec:resource:12:{12}consumer:2
+127.0.0.1:6379> ZCARD z:rl:tw:1sec:resource:12{12}:consumer:2
 (integer) 3
 ```
 
@@ -241,3 +248,8 @@ And the resulting ZCARD data for the keys involved:
 (1.00s)
 ```
 
+## A note on the use of {12} <-- curly braces in the keynames
+
+The content stored between the curly braces is used by redis as a routing value.  If the resource and the consumer share the same routing value then can be processed in the same LUA script.  For this reason it is helpful to provide a common bit of content within a set of curly braces within the keys passed to our script.  Because the SortedSets are always being trimmed so that only the entries within the last desired time window are kept, this implementation should enable millions of consumers to be represented along with their resource as SortedSets stored within the same Shard.  By adjusting the routing value for both the resource key and the consumer keys, it is even possible to guide certain groupings of resources and their consumers away from each other.
+
+Check out this for more strategies and detail: https://redis.com/blog/redis-clustering-best-practices-with-keys/   
