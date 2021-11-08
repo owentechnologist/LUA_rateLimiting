@@ -12,7 +12,7 @@ Other examples of rate limiting patterns exist:
 
 The purpose of the solution is to keep track of how many invocations are made: both against a shared resource in total, as well as for every individual consumer of that resource.  
 
-By keeping track we can also enforce a limiting behavior - call this script before you invoke the actual underlying resource and if you get a positive response go ahead and invoke the actual resource.  If you get a negative response indictaing that either the reource is over the limit, or the consumer is over its limit, then you must wait a bit before trying again. 
+By keeping track we can also enforce a limiting behavior - call this script before you invoke the actual underlying resource and if you get a positive response go ahead and invoke the actual resource.  If you get a negative response indicating that either the reource is over the limit, or the consumer is over its limit, then you must wait a bit before trying again. 
 
 This script uses SortedSets that store timestamps of each invocation made.
 The SortedSet is a collection of entries with 2 values for each entry:
