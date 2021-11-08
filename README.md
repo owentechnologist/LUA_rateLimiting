@@ -177,6 +177,23 @@ Looking at the resulting cardinality of the involved SortedSets reveals this sta
 (integer) 3
 ```
 
+### time it takes to execute the script on my laptop: 786 microseconds on the redis side (less than one millisecond)
+```
+127.0.0.1:6379> multi
+OK
+127.0.0.1:6379> time
+QUEUED
+127.0.0.1:6379> EVALSHA 6efc874244ac8797c2b893fdafcd95c25a480003 2 z:rl:tw:1sec:resource:12{12} z:rl:tw:1sec:resource:12{12}:consumer:3 10 5 3
+QUEUED
+127.0.0.1:6379> time
+QUEUED
+127.0.0.1:6379> exec
+1) 1) "1636394034"
+   2) "445309"
+2) "Adding 1 point to your count and 1 point to the resource count"
+3) 1) "1636394034"
+   2) "446095"
+```
 
 ## A version of the script that only returns True when it is OK to invoke the shared resource and False when it is not OK looks like this:
 (note it would be simple to replace False with 0 and True with 1 if you prefer)
