@@ -250,6 +250,8 @@ And the resulting ZCARD data for the keys involved:
 
 ## A note on the use of {12} <-- curly braces in the keynames
 
-The content stored between the curly braces is used by redis as a routing value.  If the resource and the consumer share the same routing value then can be processed in the same LUA script.  For this reason it is helpful to provide a common bit of content within a set of curly braces within the keys passed to our script.  Because the SortedSets are always being trimmed so that only the entries within the last desired time window are kept, this implementation should enable millions of consumers to be represented along with their resource as SortedSets stored within the same Shard.  By adjusting the routing value for both the resource key and the consumer keys, it is even possible to guide certain groupings of resources and their consumers away from each other.
+The content stored between the curly braces is used by redis as a routing value.  If the resource and the consumer share the same routing value: they can be processed in the same LUA script.  If they do not share the same routing value - a cross-slot error will occur.  For this reason it is helpful to provide a common and explicit value within a set of curly braces for the keys passed to our script.  
+
+Because the SortedSets are always being trimmed so that only the entries within the last desired time window are kept, this implementation should enable millions of consumers to be represented along with their resource as SortedSets stored within the same Shard.  By adjusting the routing value for both the resource key and the consumer keys, it is even possible to guide certain groupings of resources and their consumers away from each other.
 
 Check out this for more strategies and detail: https://redis.com/blog/redis-clustering-best-practices-with-keys/   
