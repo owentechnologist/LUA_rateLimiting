@@ -169,3 +169,74 @@ Looking at the resulting cardinality of the involved SortedSets reveals this sta
 127.0.0.1:6379> ZCARD z:rl:tw:1sec:resource:12:{12}consumer:2
 (integer) 3
 ```
+
+
+## A version of the script that only returns True when it is OK to invoke the shared resource and False when it is not OK looks like this:
+
+```
+"local rlimit = 0+ARGV[2] local climit = 0+ARGV[3] local t = (redis.call('TIME'))[1] local t2 = (redis.call('TIME'))[2] redis.call('ZREMRANGEBYSCORE',KEYS[1],'0',(t-ARGV[1])) local rcount = (redis.call('ZCARD',KEYS[1])) if (rcount == rlimit) then return 'False' elseif (((redis.call('ZREMRANGEBYSCORE',KEYS[2],'0',(t-ARGV[1]))) < 1000000) and (redis.call('ZCARD',KEYS[2]) < climit)) then redis.call('ZADD',KEYS[1],t,t2) redis.call('ZADD',KEYS[2],t,t2) return 'True' else return 'False' end"
+```
+
+Here is an example run with a 1/second redis-cli:
+
+```
+127.0.0.1:6379> 25 EVALSHA d64787ff546895181f231ed3102003a9697a7704 2 z:rl:tw:1sec:resource:12{12} z:rl:tw:1sec:resource:12{12}:consumer:1 10 5 3
+"True"
+"True"
+"False"
+"True"
+"False"
+"False"
+"False"
+"False"
+"False"
+"False"
+"True"
+"True"
+"False"
+"True"
+"False"
+"False"
+"False"
+"False"
+"False"
+"False"
+"True"
+"True"
+"False"
+"True"
+"False"
+(25.16s)
+```
+
+And the same time-frame with a 2/second redis-cli:
+
+```
+127.0.0.1:6379> 10 EVALSHA d64787ff546895181f231ed3102003a9697a7704 2 z:rl:tw:1sec:resource:12{12} z:rl:tw:1sec:resource:12{12}:consumer:2 10 5 3
+"True"
+"True"
+"False"
+"False"
+"False"
+"True"
+"True"
+"False"
+"False"
+"False"
+(20.06s)
+```
+
+And the resulting ZCARD data for the keys involved:
+
+```
+127.0.0.1:6379> zcard z:rl:tw:1sec:resource:12{12}:consumer:2
+(integer) 2
+(1.00s)
+127.0.0.1:6379> zcard z:rl:tw:1sec:resource:12{12}:consumer:1
+(integer) 3
+(1.00s)
+127.0.0.1:6379> zcard z:rl:tw:1sec:resource:12{12}
+(integer) 5
+(1.00s)
+```
+
