@@ -9,6 +9,9 @@ Other examples of rate limiting patterns exist:
 * https://github.com/maguec/RateLimitingExample/tree/sliding_window
 * https://redis.com/redis-best-practices/basic-rate-limiting/
 
+This article is a well-written overview of Rate limiting patterns:
+* https://medium.com/swlh/rate-limiting-fdf15bfe84ab
+
 
 The purpose of the solution is to keep track of how many invocations are made: both against a shared resource in total, as well as for every individual consumer of that resource.  
 
@@ -266,7 +269,7 @@ And the resulting ZCARD data for the keys involved:
 ```
 
 
-### Time it takes when the result is negative and a response of 0 is delivered: 191 microseconds. (note time measurements are to show a general idea of the cost) 
+### Time it takes when the result is negative and a response of 0 (changed from false example to reduce transport) is delivered: 191 microseconds. (note time measurements are to show a general idea of the cost - your mileage will vary). Good rule of thumb: rate limiting checks should take no more than 20% of the time of the operation(s) they are protecting.  (you may also have cost/contract related reasons to limit rates that would encourage constant limiting regardless)  
 
 ```
 127.0.0.1:6379> multi
