@@ -17,6 +17,19 @@ The purpose of the solution is to keep track of how many invocations are made: b
 
 By keeping track we can also enforce a limiting behavior - call this script before you invoke the actual underlying resource and if you get a positive response go ahead and invoke the actual resource.  If you get a negative response indicating that either the reource is over the limit, or the consumer is over its limit, then you must wait a bit before trying again. 
 
+The Pattern is this:
+
+    Store events in a SortedSet at whatever fidelity is needed:
+    Per Account / region
+    Per Minute / hour
+    Each event has a score equal to the time as known by Redis
+    Each time a new event occurs:
+    Remove the events that are beyond the measured time window
+    Add the new event
+    Count the total number of events within the measured time window
+
+<img src="./ratelimiting.png" alt="Rate Limiting flow diagram" title="Ratelimiting Flow Diagram" width="650"/>
+
 This script uses SortedSets that store timestamps of each invocation made.
 The SortedSet is a collection of entries with 2 values for each entry:
 1) the score of the entry
