@@ -28,7 +28,7 @@ The Pattern is this:
     Add the new event
     Count the total number of events within the measured time window
 
-<img src="./ratelimiting.png" alt="Rate Limiting flow diagram" title="Ratelimiting Flow Diagram" width="650"/>
+<img src="./ratelimiting.png" alt="Rate Limiting flow diagram" title="Ratelimiting Flow Diagram" width="850"/>
 
 This script uses SortedSets that store timestamps of each invocation made.
 The SortedSet is a collection of entries with 2 values for each entry:
