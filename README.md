@@ -65,13 +65,24 @@ If neither the resource nor the consumer are over the limit for the time window,
 The script follows:
 
 ```
-SCRIPT LOAD "local rlimit = 0+ARGV[2] local climit = 0+ARGV[3] local t = (redis.call('TIME'))[1] local t2 = (redis.call('TIME'))[2] redis.call('ZREMRANGEBYSCORE',KEYS[1],'0',(t-ARGV[1])) local rcount = (redis.call('ZCARD',KEYS[1])) if (rcount == rlimit) then return 'RESOURCE OVERLIMIT: '..redis.call('ZCARD',KEYS[1]) elseif (((redis.call('ZREMRANGEBYSCORE',KEYS[2],'0',(t-ARGV[1]))) < 1000000) and (redis.call('ZCARD',KEYS[2]) < climit)) then return 'Adding '..(redis.call('ZADD',KEYS[2],t,t2))..' point to your count and '..(redis.call('ZADD',KEYS[1],t,t2))..' point to the resource count' else return KEYS[2]..' CONSUMER OVERLIMIT: '..redis.call('ZCARD',KEYS[2]) end"
+local glimit = 0+ARGV[2] # global limit for the protected resource
+local climit = 0+ARGV[3] # limit for the consumer calling this time
+local t = (redis.call('TIME')) # current timestamp to compare against
+redis.call('ZREMRANGEBYSCORE',KEYS[1],'0',(t[1]-ARGV[1])) # delete entries older than time-window
+local rcount = (redis.call('ZCARD',KEYS[1])) # count the remaining entries 
+if (rcount == glimit) then return 
+     'RESOURCE OVERLIMIT:'..redis.call('ZCARD',KEYS[1]) # too many invocations recorded!
+elseif (((redis.call('ZREMRANGEBYSCORE',KEYS[2],'0',(t[1]-ARGV[1]))) < 1000000)
+ and (redis.call('ZCARD',KEYS[2]) < climit)) then return # all good - adding record of this invocation 
+     'Adding '..(redis.call('ZADD',KEYS[2],t[1],t[1]..':'..t[2]))..' point to your count and '..(redis.call('ZADD',KEYS[1],t[1],t[1]..':'..t[2]))..' point to the resource count'
+else return 
+     KEYS[2]..' CONSUMER OVERLIMIT: '..redis.call('ZCARD',KEYS[2]) end" # sorry - consumer will have to wait!
 ```
 
 You can load it into redis and receive a SHA unique id that can be later used to invoke it without passing the entire script every time:
 
 ```
-SCRIPT LOAD "local rlimit = 0+ARGV[2] local climit = 0+ARGV[3] local t = (redis.call('TIME'))[1] local t2 = (redis.call('TIME'))[2] redis.call('ZREMRANGEBYSCORE',KEYS[1],'0',(t-ARGV[1])) local rcount = (redis.call('ZCARD',KEYS[1])) if (rcount == rlimit) then return 'RESOURCE OVERLIMIT: '..redis.call('ZCARD',KEYS[1]) elseif (((redis.call('ZREMRANGEBYSCORE',KEYS[2],'0',(t-ARGV[1]))) < 1000000) and (redis.call('ZCARD',KEYS[2]) < climit)) then return 'Adding '..(redis.call('ZADD',KEYS[2],t,t2))..' point to your count and '..(redis.call('ZADD',KEYS[1],t,t2))..' point to the resource count' else return KEYS[2]..' CONSUMER OVERLIMIT: '..redis.call('ZCARD',KEYS[2]) end"
+SCRIPT LOAD "local glimit = 0+ARGV[2] local climit = 0+ARGV[3] local t = (redis.call('TIME')) redis.call('ZREMRANGEBYSCORE',KEYS[1],'0',(t[1]-ARGV[1])) local rcount = (redis.call('ZCARD',KEYS[1])) if (rcount == glimit) then return 'RESOURCE OVERLIMIT:'..redis.call('ZCARD',KEYS[1]) elseif (((redis.call('ZREMRANGEBYSCORE',KEYS[2],'0',(t[1]-ARGV[1]))) < 1000000) and (redis.call('ZCARD',KEYS[2]) < climit)) then return 'Adding '..(redis.call('ZADD',KEYS[2],t[1],t[1]..':'..t[2]))..' point to your count and '..(redis.call('ZADD',KEYS[1],t[1],t[1]..':'..t[2]))..' point to the resource count' else return KEYS[2]..' CONSUMER OVERLIMIT: '..redis.call('ZCARD',KEYS[2]) end"
 ```
 
 This will return a hash like this:
@@ -88,10 +99,10 @@ Which can then be used with the EVALSHA command along with necessary arguments w
 ### ARGV[2] == size of allowed operations count for shared resource key 
 ### ARGV[3] == size of allowed operations count for consumer for resource key
 
-* in the following example the resource '12' has a limit of 5 invocations every 10 seconds, while the individual consumer '1' has a limit of 3 operations every 10 seconds. 
+* in the following example the resource has a limit of 5 invocations every 10 seconds, while the individual consumer '1' has a limit of 3 operations every 10 seconds. 
 
 ```
-EVALSHA 6efc874244ac8797c2b893fdafcd95c25a480003 2 z:rl:resource:12{12} z:rl:resource:12{12}:consumer:1 10 5 3
+redis-cli -h 192.168.1.21 -p 12000 -r 10 EVALSHA 6efc874244ac8797c2b893fdafcd95c25a480003 2 ratelimit:global:calc{a} ratelimit:consumer6:calc{a} 10 5 3
 ```
 
 Which results in output like this:
@@ -103,7 +114,7 @@ Which results in output like this:
 If you run the command many times you will hit the limit for that consumer and get a response:
 
 ```
-"z:rl:tw:1sec:resource:12:consumer:1 CONSUMER OVERLIMIT: 3"
+"ratelimit:consumer9:calc{a} CONSUMER OVERLIMIT: 3"
 ```
 
 If you run a few instances of the command where each one uses a different consumer key, they will, as a group hit the limit for the resource they share and get a response like this:
@@ -122,7 +133,7 @@ redis-cli -i 1
 Then at the prompt issue the call to the script using the first consumer id:  [note that I also use a number before the call to ask redis-cli to repeat the command 100 times]
 
 ```
-100 EVALSHA 6efc874244ac8797c2b893fdafcd95c25a480003 2 z:rl:resource:12{12} z:rl:resource:12:{12}consumer:1 10 5 3
+100 EVALSHA 6efc874244ac8797c2b893fdafcd95c25a480003 2 ratelimit:global:calc{a} ratelimit:consumer9:calc{a} 10 5 3
 ```
 
 In a separate shell, start the second redis-cli instance with a 2 second interval:
@@ -134,7 +145,7 @@ redis-cli -i 2
 Then at the prompt issue a call to the script using a different consumer id: (this is done by changing the name of the second key passed in) 
 
 ```
-100 EVALSHA 6efc874244ac8797c2b893fdafcd95c25a480003 2 z:rl:resource:12{12} z:rl:resource:12{12}:consumer:2 10 5 3
+100 EVALSHA 6efc874244ac8797c2b893fdafcd95c25a480003 2 ratelimit:global:calc{a} ratelimit:consumer20:calc{a} 10 50 3
 ```
 
 
@@ -147,9 +158,9 @@ Output from the first redis-cli session looks like this once the second session 
 "Adding 1 point to your count and 1 point to the resource count"
 "Adding 1 point to your count and 1 point to the resource count"
 "RESOURCE OVERLIMIT: 5"
-"z:rl:tw:1sec:resource:12{12}:consumer:1 CONSUMER OVERLIMIT: 3"
+"ratelimit:consumer9:calc{a} CONSUMER OVERLIMIT: 3"
 "RESOURCE OVERLIMIT: 5"
-"z:rl:tw:1sec:resource:12{12}:consumer:1 CONSUMER OVERLIMIT: 3"
+"ratelimit:consumer9:calc{a} CONSUMER OVERLIMIT: 3"
 "RESOURCE OVERLIMIT: 5"
 "RESOURCE OVERLIMIT: 5"
 "RESOURCE OVERLIMIT: 5"
@@ -157,9 +168,9 @@ Output from the first redis-cli session looks like this once the second session 
 "Adding 1 point to your count and 1 point to the resource count"
 "Adding 1 point to your count and 1 point to the resource count"
 "RESOURCE OVERLIMIT: 5"
-"z:rl:tw:1sec:resource:12{12}:consumer:1 CONSUMER OVERLIMIT: 3"
+"ratelimit:consumer9:calc{a} CONSUMER OVERLIMIT: 3"
 "RESOURCE OVERLIMIT: 5"
-"z:rl:tw:1sec:resource:12{12}:consumer:1 CONSUMER OVERLIMIT: 3"
+"ratelimit:consumer9:calc{a} CONSUMER OVERLIMIT: 3"
 "RESOURCE OVERLIMIT: 5"
 "RESOURCE OVERLIMIT: 5"
 "RESOURCE OVERLIMIT: 5"
@@ -183,13 +194,13 @@ Meanhwile, the slower second session with the 2 second interval between its invo
 Looking at the resulting cardinality of the involved SortedSets reveals this state at the end of the run:
 
 ```
-127.0.0.1:6379> ZCARD z:rl:resource:12{12}
+127.0.0.1:6379> ZCARD ratelimit:global:calc{a}
 (integer) 5
 
-127.0.0.1:6379> ZCARD z:rl:resource:12{12}:consumer:1
+127.0.0.1:6379> ZCARD ratelimit:consumer9:calc{a}
 (integer) 3
 
-127.0.0.1:6379> ZCARD z:rl:resource:12{12}:consumer:2
+127.0.0.1:6379> ZCARD ratelimit:consumer20:calc{a}
 (integer) 3
 ```
 
@@ -199,7 +210,7 @@ Looking at the resulting cardinality of the involved SortedSets reveals this sta
 OK
 127.0.0.1:6379> time
 QUEUED
-127.0.0.1:6379> EVALSHA 6efc874244ac8797c2b893fdafcd95c25a480003 2 z:rl:tw:1sec:resource:12{12} z:rl:tw:1sec:resource:12{12}:consumer:3 10 5 3
+127.0.0.1:6379> EVALSHA 6efc874244ac8797c2b893fdafcd95c25a480003 2 ratelimit:global:calc{a} ratelimit:consumer9:calc{a} 10 5 3
 QUEUED
 127.0.0.1:6379> time
 QUEUED
@@ -215,13 +226,13 @@ QUEUED
 (note it would be simple to replace False with 0 and True with 1 if you prefer)
 
 ```
-"local rlimit = 0+ARGV[2] local climit = 0+ARGV[3] local t = (redis.call('TIME'))[1] local t2 = (redis.call('TIME'))[2] redis.call('ZREMRANGEBYSCORE',KEYS[1],'0',(t-ARGV[1])) local rcount = (redis.call('ZCARD',KEYS[1])) if (rcount == rlimit) then return 'False' elseif (((redis.call('ZREMRANGEBYSCORE',KEYS[2],'0',(t-ARGV[1]))) < 1000000) and (redis.call('ZCARD',KEYS[2]) < climit)) then redis.call('ZADD',KEYS[1],t,t2) redis.call('ZADD',KEYS[2],t,t2) return 'True' else return 'False' end"
+"local rlimit = 0+ARGV[2] local climit = 0+ARGV[3] local t = (redis.call('TIME')) redis.call('ZREMRANGEBYSCORE',KEYS[1],'0',(t[1]-ARGV[1])) local rcount = (redis.call('ZCARD',KEYS[1])) if (rcount == rlimit) then return 'False' elseif (((redis.call('ZREMRANGEBYSCORE',KEYS[2],'0',(t[1]-ARGV[1]))) < 1000000) and (redis.call('ZCARD',KEYS[2]) < climit)) then redis.call('ZADD',KEYS[1],t[1],t[1]..':'..t[2]) redis.call('ZADD',KEYS[2],t[1],t[1]..':'..t[2]) return 'True' else return 'False' end"
 ```
 
 Here is an example run with a 1/second redis-cli:
 
 ```
-127.0.0.1:6379> 25 EVALSHA d64787ff546895181f231ed3102003a9697a7704 2 z:rl:resource:12{12} z:rl:resource:12{12}:consumer:1 10 5 3
+127.0.0.1:6379> 25 EVALSHA d64787ff546895181f231ed3102003a9697a7704 2 ratelimit:global:calc{a} ratelimit:consumer9:calc{a} 10 5 3
 "True"
 "True"
 "False"
@@ -253,7 +264,7 @@ Here is an example run with a 1/second redis-cli:
 And the same time-frame with a 2/second redis-cli:
 
 ```
-127.0.0.1:6379> 10 EVALSHA d64787ff546895181f231ed3102003a9697a7704 2 z:rl:resource:12{12} z:rl:resource:12{12}:consumer:2 10 5 3
+127.0.0.1:6379> 10 EVALSHA d64787ff546895181f231ed3102003a9697a7704 2 ratelimit:global:calc{a} ratelimit:consumer20:calc{a} 10 5 3
 "True"
 "True"
 "False"
@@ -270,13 +281,13 @@ And the same time-frame with a 2/second redis-cli:
 And the resulting ZCARD data for the keys involved:
 
 ```
-127.0.0.1:6379> zcard z:rl:resource:12{12}:consumer:2
+127.0.0.1:6379> zcard ratelimit:consumer9:calc{a}
 (integer) 2
 (1.00s)
-127.0.0.1:6379> zcard z:rl:resource:12{12}:consumer:1
+127.0.0.1:6379> zcard ratelimit:consumer20:calc{a}
 (integer) 3
 (1.00s)
-127.0.0.1:6379> zcard z:rl:resource:12{12}
+127.0.0.1:6379> zcard ratelimit:global:calc{a}
 (integer) 5
 (1.00s)
 ```
@@ -289,7 +300,7 @@ And the resulting ZCARD data for the keys involved:
 OK
 127.0.0.1:6379> time
 QUEUED
-127.0.0.1:6379> EVALSHA a4fadd8a0971fa009896b0c7a71b8fe7c929353a 2 z:rl:tw:1sec:resource:12{12} z:rl:tw:1sec:resource:12{12}:consumer:3 10 5 3
+127.0.0.1:6379> EVALSHA a4fadd8a0971fa009896b0c7a71b8fe7c929353a 2 ratelimit:global:calc{a} ratelimit:consumer9:calc{a} 10 5 3
 QUEUED
 127.0.0.1:6379> time
 QUEUED
@@ -302,7 +313,7 @@ QUEUED
 ```
 
 
-## A note on the use of {12} <-- curly braces in the keynames
+## A note on the use of {a} <-- curly braces in the keynames
 
 The content stored between the curly braces is used by redis as a routing value.  If the resource and the consumer share the same routing value: they can be processed in the same LUA script.  If they do not share the same routing value - a cross-slot error will occur.  For this reason it is helpful to provide a common and explicit value within a set of curly braces for the keys passed to our script.  
 
@@ -311,7 +322,7 @@ Because the SortedSets are always being trimmed so that only the entries within 
 If I had a different resource to be protected with its consumers being limited, I could put its id inside the routing value instead. 
 
 ```
-127.0.0.1:6379> 10 EVALSHA d64787ff546895181f231ed3102003a9697a7704 2 z:rl:resource:myduck{myduck} z:rl:resource:myduck{myduck}:consumer:2 10 5 3
+127.0.0.1:6379> 10 EVALSHA d64787ff546895181f231ed3102003a9697a7704 2 ratelimit:global:calc{myduck} ratelimit:consumer9:calc{myduck} 10 5 3
 ```
 
 As the routing is based on doing a modulus operator against the 16384 available slots and then routing the keys to the assigned partitions within your cluster that holds the resulting slot value - it should become obvious that you can have an influence on the distribution of your keys.  
