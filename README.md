@@ -35,18 +35,18 @@ The SortedSet is a collection of entries with 2 values for each entry:
 1) the score of the entry
 2) the value of the entry
 
-In our example, the SortedSets get populated with the timestamp up to the most recent second as the score and the value of the microseconds that have passed since the most recent second as the value. (this value is used to ensure that there are very few collisions within a single key - as SortedSets will not allow multiple entries with the same value)
+In our example, the SortedSets get populated with the timestamp as seconds up to the most recent second as the <h5>score</h5> and the timestamp plus the value of the microseconds that have passed since the most recent second as the <h5>value</h5>. (this value is used to ensure that there are very few collisions within a single key - as SortedSets will not allow multiple entries with the same value)
 
-Here is the result of calling ZRANGE on a key that holds entries for a shared resource with an id of 12:
-
+Here is the result of calling ZRANGE on a key that holds entries for a shared resource called global:calc{a}
+<h5>The values are shown first:</h5>
 ```
-127.0.0.1:6379> ZRANGE z:rl:resource:12{12} 0 -1 withscores
-1) "104768"
-2) "1636330091"
-3) "111348"
-4) "1636330093"
-5) "129134"
-6) "1636330097"
+127.0.0.1:6379> ZRANGE ratelimit:global:calc{a} 0 -1 withscores
+1) "1665096670:466762"
+2) "1665096670"
+3) "1665096670:468558"
+4) "1665096670"
+5) "1665096670:470406"
+6) "1665096670"
 ```
 
 The script acts in this way:
