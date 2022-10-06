@@ -39,6 +39,7 @@ In our example, the SortedSets get populated with the timestamp as seconds up to
 
 Here is the result of calling ZRANGE on a key that holds entries for a shared resource called global:calc{a}
 <h5>The values are shown first:</h5>
+
 ```
 127.0.0.1:6379> ZRANGE ratelimit:global:calc{a} 0 -1 withscores
 1) "1665096670:466762"
@@ -47,6 +48,7 @@ Here is the result of calling ZRANGE on a key that holds entries for a shared re
 4) "1665096670"
 5) "1665096670:470406"
 6) "1665096670"
+
 ```
 
 The script acts in this way:
